@@ -1,0 +1,27 @@
+int32 find_min(int32 arr[20]) shro
+    int32 min_val;
+    int32 i;
+
+    min_val medalo arr[0];
+    i medalo 1;
+
+    jabtak (i < 20) shro
+        agar (arr[i] < min_val) shro
+            min_val medalo arr[i];
+        khatam
+        i medalo (i + 1);
+    khatam
+
+    return min_val;
+khatam
+
+int32 main() shro
+    int32 numbers[20];
+    int32 smallest;
+
+    numbers[0] medalo 45;
+    numbers[1] medalo 12;
+    smallest medalo find_min(numbers);
+
+    return smallest;
+khatam

@@ -1,0 +1,22 @@
+int32 check_pass(int32 marks) shro
+    int32 result;
+
+    agar (marks >= 50) shro
+        result medalo 1;
+    khatam
+    magar shro
+        result medalo 0;
+    khatam
+
+    return result;
+khatam
+
+int32 main() shro
+    int32 score;
+    int32 status;
+
+    score medalo 75;
+    status medalo check_pass(score);
+
+    return status;
+khatam

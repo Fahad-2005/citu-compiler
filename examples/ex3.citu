@@ -1,0 +1,21 @@
+int32 sum_numbers(int32 n) shro
+    int32 total;
+    int32 i;
+
+    total medalo 0;
+    i medalo 1;
+
+    jabtak (i <= n) shro
+        total medalo (total + i);
+        i medalo (i + 1);
+    khatam
+
+    return total;
+khatam
+
+int32 main() shro
+    int32 ans;
+
+    ans medalo sum_numbers(10);
+    return ans;
+khatam
