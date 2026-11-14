@@ -44,7 +44,6 @@
 **What this program does:**
 - Declares a 20-element `int32` array in `main()` and passes it to the `find_min` function.
 
-
 ```citu
 int32 find_min(int32 arr[20]) shro
     int32 min_val;
@@ -112,7 +111,6 @@ khatam
 **What this program does:**
 - Passes `10` from `main()` into `sum_numbers(int32 n)` to return total sum.
 
-
 ```citu
 int32 sum_numbers(int32 n) shro
     int32 total;
@@ -139,6 +137,125 @@ khatam
 
 ---
 
-## 5. Git Repository Details
+## 5. Citu Language Grammar
+
+### 5.1 Lexical Rules (Token Specifications)
+The Lexical Analyzer scans `.citu` source files and converts character streams into the following token categories:
+
+| Token Category | Token Name | Pattern / Lexeme |
+| :--- | :--- | :--- |
+| **Type Keywords** | `KW_INT16`, `KW_INT32`, `KW_UINT16`, `KW_UINT32`, `KW_FLOAT`, `KW_CHAR` | `int16`, `int32`, `uint16`, `uint32`, `float`, `char` |
+| **Control Keywords** | `KW_SHRO`, `KW_KHATAM`, `KW_AGAR`, `KW_MAGAR`, `KW_JABTAK`, `KW_NIKAL`, `KW_RETURN`, `KW_STRUCT` | `shro`, `khatam`, `agar`, `magar`, `jabtak`, `nikal`, `return`, `struct` |
+| **Assignment Operator** | `OP_MEDALO` | `medalo` |
+| **Arithmetic Operators** | `OP_PLUS`, `OP_MINUS`, `OP_MUL`, `OP_DIV` | `+`, `-`, `*`, `/` |
+| **Relational Operators** | `OP_EQ`, `OP_NEQ`, `OP_LT`, `OP_LTE`, `OP_GT`, `OP_GTE` | `==`, `!=`, `<`, `<=`, `>`, `>=` |
+| **Member Access** | `OP_DOT` | `.` |
+| **Delimiters** | `LPAREN`, `RPAREN`, `LBRACK`, `RBRACK`, `SEMI`, `COMMA` | `(`, `)`, `[`, `]`, `;`, `,` |
+| **Identifiers** | `ID` | `[a-zA-Z_][a-zA-Z0-9_]*` |
+| **Integer Literal** | `INT_LITERAL` | `[0-9]+` |
+| **Float Literal** | `FLOAT_LITERAL` | `[0-9]+\.[0-9]+` |
+| **Character Literal** | `CHAR_LITERAL` | `'[^']'` |
+| **Whitespace & Comments** | *(Ignored)* | Spaces, `\t`, `\n`, `\r`, `//...`, `/*...*/` |
+
+---
+
+### 5.2 Syntax Rules (Context-Free Grammar)
+The Context-Free Grammar (CFG) below defines valid syntactic structures in `Citu`. Notice that the `Block` production (`shro VarDeclList StmtList khatam`) structurally enforces the **ANSI C (C89) Scope Rule**: all variable declarations must appear before any executable statements.
+
+```bnf
+Program       -> DeclList
+
+DeclList      -> Decl DeclList
+               | ε
+
+Decl          -> StructDecl
+               | FuncDecl
+
+StructDecl    -> struct ID shro VarDeclList khatam
+
+FuncDecl      -> TypeSpec ID ( ParamList ) Block
+
+ParamList     -> Param , ParamList
+               | Param
+               | ε
+
+Param         -> TypeSpec ID
+               | TypeSpec ID [ ]
+               | TypeSpec ID [ INT_LITERAL ]
+
+Block         -> shro VarDeclList StmtList khatam
+
+VarDeclList   -> VarDecl VarDeclList
+               | ε
+
+VarDecl       -> TypeSpec ID ;
+               | TypeSpec ID [ INT_LITERAL ] ;
+
+TypeSpec      -> int16
+               | int32
+               | uint16
+               | uint32
+               | float
+               | char
+               | struct ID
+
+StmtList      -> Stmt StmtList
+               | ε
+
+Stmt          -> AssignStmt
+               | IfStmt
+               | WhileStmt
+               | BreakStmt
+               | ReturnStmt
+               | Block
+
+AssignStmt    -> LValue medalo Expr ;
+
+LValue        -> ID
+               | ID [ Expr ]
+               | ID . ID
+
+IfStmt        -> agar ( Expr ) Block
+               | agar ( Expr ) Block magar Block
+
+WhileStmt     -> jabtak ( Expr ) Block
+
+BreakStmt     -> nikal ;
+
+ReturnStmt    -> return Expr ;
+               | return ;
+
+Expr          -> RelExpr
+
+RelExpr       -> AddExpr RelOp AddExpr
+               | AddExpr
+
+RelOp         -> == | != | < | <= | > | >=
+
+AddExpr       -> AddExpr + Term
+               | AddExpr - Term
+               | Term
+
+Term          -> Term * Factor
+               | Term / Factor
+               | Factor
+
+Factor        -> ( Expr )
+               | LValue
+               | FuncCall
+               | INT_LITERAL
+               | FLOAT_LITERAL
+               | CHAR_LITERAL
+
+FuncCall      -> ID ( ArgList )
+
+ArgList       -> Expr , ArgList
+               | Expr
+               | ε
+```
+
+---
+
+## 6. Git Repository Details
 - **Student ID:** `BSCS23047`
 - **Repository URL:** `https://github.com/Fahad-2005/citu-compiler.git`
