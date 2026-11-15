@@ -256,6 +256,157 @@ ArgList       -> Expr , ArgList
 
 ---
 
-## 6. Git Repository Details
+## 6. Compiler Data Structures
+
+The `Citu` compiler uses three core in-memory data structures across its front-end and middle-end phases:
+
+### 6.1 Token & Token List (Lexical Analyzer)
+Each scanned lexeme is stored as a `Token` record inside a dynamic array (`std::vector<Token>`), preserving source coordinates for syntax and semantic error reporting.
+
+```cpp
+enum TokenType {
+    // Type & Control Keywords
+    KW_INT16, KW_INT32, KW_UINT16, KW_UINT32, KW_FLOAT, KW_CHAR,
+    KW_SHRO, KW_KHATAM, KW_AGAR, KW_MAGAR, KW_JABTAK, KW_NIKAL, KW_RETURN, KW_STRUCT,
+    // Operators & Delimiters
+    OP_MEDALO, OP_PLUS, OP_MINUS, OP_MUL, OP_DIV,
+    OP_EQ, OP_NEQ, OP_LT, OP_LTE, OP_GT, OP_GTE, OP_DOT,
+    LPAREN, RPAREN, LBRACK, RBRACK, SEMI, COMMA,
+    // Identifiers, Literals & EOF
+    ID, INT_LITERAL, FLOAT_LITERAL, CHAR_LITERAL, TOKEN_EOF
+};
+
+struct Token {
+    TokenType type;      // Token category
+    std::string lexeme;  // Exact matched text (e.g., "medalo", "find_min")
+    int line;            // 1-based line number in .citu file
+    int column;          // 1-based column offset
+};
+```
+
+### 6.2 Hierarchical Symbol Table (Semantic Analyzer)
+To enforce the **ANSI C (C89) Scope Rule** (top-of-block declarations inside `shro` ... `khatam`), the compiler maintains a tree/stack of scope tables (`Scope`). Lookups check the current block first and walk upward through `parent` pointers to enclosing blocks and global scope.
+
+```cpp
+enum SymbolKind {
+    SYM_VAR,
+    SYM_ARRAY,
+    SYM_PARAM,
+    SYM_FUNC,
+    SYM_STRUCT
+};
+
+struct SymbolEntry {
+    std::string name;        // Identifier name
+    std::string dataType;    // "int16", "int32", "uint16", "uint32", "float", "char", or struct name
+    SymbolKind kind;         // Variable, array, parameter, function, or struct
+    int arraySize;           // 0 for scalars; N for arrays (e.g., 20 in arr[20])
+    int scopeLevel;          // 0 = Global, 1 = Function/Struct body, 2+ = Nested shro blocks
+    int memoryOffset;        // Stack frame offset (bytes) for code generation
+};
+
+struct Scope {
+    int scopeId;
+    Scope* parent;                                           // Enclosing scope (nullptr for global)
+    std::unordered_map<std::string, SymbolEntry> symbols;    // Fast O(1) lookup within current block
+};
+```
+
+### 6.3 Abstract Syntax Tree (Parser)
+The Parser constructs a multi-way **Abstract Syntax Tree (`ASTNode`)** that strips away syntactic punctuation (`;`, `(`, `)`) while preserving block boundaries, operator precedence, and declaration order.
+
+```cpp
+enum NodeKind {
+    NODE_PROGRAM, NODE_FUNC_DECL, NODE_STRUCT_DECL, NODE_VAR_DECL,
+    NODE_BLOCK, NODE_ASSIGN, NODE_IF, NODE_WHILE, NODE_BREAK, NODE_RETURN,
+    NODE_BINARY_EXPR, NODE_FUNC_CALL, NODE_LVALUE, NODE_LITERAL
+};
+
+struct ASTNode {
+    NodeKind kind;                     // Construct type
+    std::string value;                 // Operator ("+", "medalo"), identifier, or literal text
+    std::string dataType;              // Resolved type annotation populated during semantic analysis
+    int line;                          // Source line number
+    std::vector<ASTNode*> children;    // Sub-expressions, declarations, statements, or block bodies
+};
+```
+
+---
+
+## 7. Intermediate File Formats
+
+Each compiler stage writes a human-readable intermediate artifact inside the `build/` directory so individual modules can be inspected and debugged independently.
+
+| Pipeline Stage | Output File | Format Description |
+| :--- | :--- | :--- |
+| **1. Lexical Analyzer** | `build/<name>.tok` | Pipe-delimited token stream (`LINE \| COL \| TOKEN_TYPE \| LEXEME`). |
+| **2. Syntax Analyzer** | `build/<name>.ast` | Indented hierarchical tree dump of all `ASTNode` constructs. |
+| **3. Semantic Analyzer** | `build/<name>.sym` | Tabular symbol table dump per scope (`SCOPE \| NAME \| KIND \| TYPE \| SIZE \| OFFSET`). |
+| **4. IR Generator** | `build/<name>.tac` | Linear Three-Address Code (TAC) with virtual temporaries (`t0`, `t1`) and labels (`L0`, `L1`). |
+| **5. Code Generator** | `build/<name>.asm` | Target x86 (32-bit) assembly instructions ready for assembling/linking into `.exe`. |
+
+### 7.1 Sample Intermediate Outputs (from `examples/ex2.citu`)
+
+**1. Token Stream (`build/ex2.tok`):**
+```text
+1 | 1  | KW_INT32    | int32
+1 | 7  | ID          | check_pass
+1 | 17 | LPAREN      | (
+1 | 18 | KW_INT32    | int32
+1 | 24 | ID          | marks
+1 | 29 | RPAREN      | )
+1 | 31 | KW_SHRO     | shro
+2 | 5  | KW_INT32    | int32
+2 | 11 | ID          | result
+2 | 17 | SEMI        | ;
+...
+```
+
+**2. Abstract Syntax Tree (`build/ex2.ast`):**
+```text
+Program
+ └── FuncDecl (name="check_pass", returnType="int32")
+      ├── Param (name="marks", type="int32")
+      └── Block
+           ├── VarDecl (name="result", type="int32")
+           ├── IfStmt
+           │    ├── BinaryExpr (op=">=")
+           │    │    ├── LValue (name="marks")
+           │    │    └── Literal (val="50")
+           │    ├── Block (then)
+           │    │    └── AssignStmt (target="result", op="medalo", val="1")
+           │    └── Block (else / magar)
+           │         └── AssignStmt (target="result", op="medalo", val="0")
+           └── ReturnStmt (expr="result")
+```
+
+**3. Symbol Table Dump (`build/ex2.sym`):**
+```text
+SCOPE | NAME       | KIND     | TYPE  | ARRAY_SIZE | OFFSET
+0     | check_pass | SYM_FUNC | int32 | 0          | 0
+0     | main       | SYM_FUNC | int32 | 0          | 0
+1     | marks      | SYM_PARAM| int32 | 0          | +8
+1     | result     | SYM_VAR  | int32 | 0          | -4
+2     | score      | SYM_VAR  | int32 | 0          | -4
+2     | status     | SYM_VAR  | int32 | 0          | -8
+```
+
+**4. Three-Address Code (`build/ex2.tac`):**
+```text
+func check_pass:
+    t0 = marks >= 50
+    if_false t0 goto L1
+    result = 1
+    goto L2
+L1:
+    result = 0
+L2:
+    return result
+endfunc
+```
+
+---
+
+## 8. Git Repository Details
 - **Student ID:** `BSCS23047`
 - **Repository URL:** `https://github.com/Fahad-2005/citu-compiler.git`
