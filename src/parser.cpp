@@ -255,3 +255,177 @@ ASTNode* Parser::parseBlock() {
 }
 
 // Stmt -> Block | IfStmt | WhileStmt | BreakStmt | ReturnStmt | AssignOrCallStmt
+ASTNode* Parser::parseStmt() {
+    if (check(KW_SHRO))   return parseBlock();
+    if (check(KW_AGAR))   return parseIfStmt();
+    if (check(KW_JABTAK)) return parseWhileStmt();
+    if (check(KW_NIKAL))  return parseBreakStmt();
+    if (check(KW_RETURN)) return parseReturnStmt();
+    if (check(ID))        return parseAssignOrCallStmt();
+
+    const Token& bad = peek();
+    throw runtime_error(
+        "Syntax Error at line " + to_string(bad.line) +
+        ", col " + to_string(bad.column) +
+        ": Unexpected token '" + bad.lexeme + "' at start of statement"
+    );
+}
+
+// IfStmt -> agar ( Expr ) Block ( magar Block )?
+ASTNode* Parser::parseIfStmt() {
+    Token kw = expect(KW_AGAR, "Expected 'agar'");
+    ASTNode* ifNode = new ASTNode(NODE_IF, "agar", "", kw.line);
+
+    expect(LPAREN, "Expected '(' after 'agar'");
+    ifNode->addChild(parseExpr());
+    expect(RPAREN, "Expected ')' after 'agar' condition");
+
+    ifNode->addChild(parseBlock());
+
+    if (match({KW_MAGAR})) {
+        ifNode->addChild(parseBlock());
+    }
+
+    return ifNode;
+}
+
+// WhileStmt -> jabtak ( Expr ) Block
+ASTNode* Parser::parseWhileStmt() {
+    Token kw = expect(KW_JABTAK, "Expected 'jabtak'");
+    ASTNode* whileNode = new ASTNode(NODE_WHILE, "jabtak", "", kw.line);
+
+    expect(LPAREN, "Expected '(' after 'jabtak'");
+    whileNode->addChild(parseExpr());
+    expect(RPAREN, "Expected ')' after 'jabtak' condition");
+
+    whileNode->addChild(parseBlock());
+    return whileNode;
+}
+
+// BreakStmt -> nikal ;
+ASTNode* Parser::parseBreakStmt() {
+    Token kw = expect(KW_NIKAL, "Expected 'nikal'");
+    expect(SEMI, "Expected ';' after 'nikal'");
+    return new ASTNode(NODE_BREAK, "nikal", "", kw.line);
+}
+
+// ReturnStmt -> return Expr? ;
+ASTNode* Parser::parseReturnStmt() {
+    Token kw = expect(KW_RETURN, "Expected 'return'");
+    ASTNode* retNode = new ASTNode(NODE_RETURN, "return", "", kw.line);
+
+    if (!check(SEMI)) {
+        retNode->addChild(parseExpr());
+    }
+    expect(SEMI, "Expected ';' after return statement");
+    return retNode;
+}
+
+// AssignStmt -> LValue medalo Expr ;  OR  FuncCallStmt -> ID ( ArgList? ) ;
+ASTNode* Parser::parseAssignOrCallStmt() {
+    if (peek().type == ID && peek(1).type == LPAREN) {
+        ASTNode* callNode = parseFuncCall();
+        expect(SEMI, "Expected ';' after function call");
+        return callNode;
+    }
+
+    ASTNode* target = parseLValue();
+    Token op = expect(OP_MEDALO, "Expected 'medalo' in assignment statement");
+    ASTNode* rhs = parseExpr();
+    expect(SEMI, "Expected ';' after assignment statement");
+
+    ASTNode* assignNode = new ASTNode(NODE_ASSIGN, "medalo", "", op.line);
+    assignNode->addChild(target);
+    assignNode->addChild(rhs);
+    return assignNode;
+}
+
+// LValue -> ID ( [ Expr ] | . ID )*
+ASTNode* Parser::parseLValue() {
+    Token base = expect(ID, "Expected identifier");
+    ASTNode* lvalNode = new ASTNode(NODE_LVALUE, base.lexeme, "", base.line);
+
+    while (check(LBRACK) || check(OP_DOT)) {
+        if (match({LBRACK})) {
+            lvalNode->addChild(parseExpr());
+            expect(RBRACK, "Expected ']' after array index expression");
+        } else if (match({OP_DOT})) {
+            Token member = expect(ID, "Expected struct member name after '.'");
+            lvalNode->addChild(new ASTNode(NODE_LVALUE, "." + member.lexeme, "", member.line));
+        }
+    }
+    return lvalNode;
+}
+
+ASTNode* Parser::parseExpr() {
+    return parseEqualityExpr();
+}
+
+// EqualityExpr -> RelationalExpr ( ( == | != ) RelationalExpr )*
+ASTNode* Parser::parseEqualityExpr() {
+    ASTNode* left = parseRelationalExpr();
+    while (match({OP_EQ, OP_NEQ})) {
+        Token op = previous();
+        ASTNode* right = parseRelationalExpr();
+        ASTNode* bin = new ASTNode(NODE_BINARY_EXPR, op.lexeme, "", op.line);
+        bin->addChild(left);
+        bin->addChild(right);
+        left = bin;
+    }
+    return left;
+}
+
+// RelationalExpr -> AdditiveExpr ( ( < | <= | > | >= ) AdditiveExpr )*
+ASTNode* Parser::parseRelationalExpr() {
+    ASTNode* left = parseAdditiveExpr();
+    while (match({OP_LT, OP_LTE, OP_GT, OP_GTE})) {
+        Token op = previous();
+        ASTNode* right = parseAdditiveExpr();
+        ASTNode* bin = new ASTNode(NODE_BINARY_EXPR, op.lexeme, "", op.line);
+        bin->addChild(left);
+        bin->addChild(right);
+        left = bin;
+    }
+    return left;
+}
+
+// AdditiveExpr -> MultiplicativeExpr ( ( + | - ) MultiplicativeExpr )*
+ASTNode* Parser::parseAdditiveExpr() {
+    ASTNode* left = parseMultiplicativeExpr();
+    while (match({OP_PLUS, OP_MINUS})) {
+        Token op = previous();
+        ASTNode* right = parseMultiplicativeExpr();
+        ASTNode* bin = new ASTNode(NODE_BINARY_EXPR, op.lexeme, "", op.line);
+        bin->addChild(left);
+        bin->addChild(right);
+        left = bin;
+    }
+    return left;
+}
+
+// MultiplicativeExpr -> UnaryExpr ( ( * | / ) UnaryExpr )*
+ASTNode* Parser::parseMultiplicativeExpr() {
+    ASTNode* left = parseUnaryExpr();
+    while (match({OP_MUL, OP_DIV})) {
+        Token op = previous();
+        ASTNode* right = parseUnaryExpr();
+        ASTNode* bin = new ASTNode(NODE_BINARY_EXPR, op.lexeme, "", op.line);
+        bin->addChild(left);
+        bin->addChild(right);
+        left = bin;
+    }
+    return left;
+}
+
+// UnaryExpr -> ( - | + ) UnaryExpr | PrimaryExpr
+ASTNode* Parser::parseUnaryExpr() {
+    if (match({OP_MINUS, OP_PLUS})) {
+        Token op = previous();
+        ASTNode* unary = new ASTNode(NODE_UNARY_EXPR, op.lexeme, "", op.line);
+        unary->addChild(parseUnaryExpr());
+        return unary;
+    }
+    return parsePrimaryExpr();
+}
+
+// PrimaryExpr -> INT_LITERAL | FLOAT_LITERAL | CHAR_LITERAL | ( Expr ) | FuncCall | LValue

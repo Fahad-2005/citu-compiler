@@ -1,4 +1,5 @@
 #include "../include/lexer.h"
+#include "../include/parser.h"
 #include <fstream>
 #include <iostream>
 #include <sstream>
@@ -48,6 +49,9 @@ int main(int argc, char* argv[]) {
     MAKE_DIR("build");
     string baseName = extractBaseName(inputPath);
     string tokOutputPath = "build/" + baseName + ".tok";
+    string astOutputPath = "build/" + baseName + ".ast";
+
+    ASTNode* astRoot = nullptr;
 
     try {
         // Stage 1: Lexical Analysis
@@ -58,9 +62,22 @@ int main(int argc, char* argv[]) {
             cerr << "Error: Failed to write token file '" << tokOutputPath << "'\n";
             return 1;
         }
+        cout << "[Lexer]  Tokenized " << tokens.size() << " tokens -> " << tokOutputPath << "\n";
 
-        cout << "[Lexer] Tokenized " << tokens.size() << " tokens -> " << tokOutputPath << "\n";
+        // Stage 2: Syntax Analysis (Parsing)
+        Parser parser(tokens);
+        astRoot = parser.parseProgram();
+
+        if (!Parser::writeASTToFile(astRoot, astOutputPath)) {
+            delete astRoot;
+            cerr << "Error: Failed to write AST file '" << astOutputPath << "'\n";
+            return 1;
+        }
+        cout << "[Parser] Generated AST -> " << astOutputPath << "\n";
+
+        delete astRoot;
     } catch (const exception& ex) {
+        delete astRoot;
         cerr << ex.what() << "\n";
         return 1;
     }
