@@ -36,6 +36,7 @@ const Token& Parser::peek(size_t offset) const {
 }
 
 const Token& Parser::previous() const {
+    if (current == 0) return tokens[0];
     return tokens[current - 1];
 }
 
@@ -44,7 +45,7 @@ bool Parser::isAtEnd() const {
 }
 
 bool Parser::check(TokenType type) const {
-    if (isAtEnd()) return false;
+    if (tokens.empty()) return type == TOKEN_EOF;
     return peek().type == type;
 }
 
@@ -429,3 +430,97 @@ ASTNode* Parser::parseUnaryExpr() {
 }
 
 // PrimaryExpr -> INT_LITERAL | FLOAT_LITERAL | CHAR_LITERAL | ( Expr ) | FuncCall | LValue
+ASTNode* Parser::parsePrimaryExpr() {
+    if (match({INT_LITERAL})) {
+        Token tok = previous();
+        return new ASTNode(NODE_LITERAL, tok.lexeme, "int32", tok.line);
+    }
+    if (match({FLOAT_LITERAL})) {
+        Token tok = previous();
+        return new ASTNode(NODE_LITERAL, tok.lexeme, "float", tok.line);
+    }
+    if (match({CHAR_LITERAL})) {
+        Token tok = previous();
+        return new ASTNode(NODE_LITERAL, tok.lexeme, "char", tok.line);
+    }
+    if (match({LPAREN})) {
+        ASTNode* inner = parseExpr();
+        expect(RPAREN, "Expected ')' after parenthesized expression");
+        return inner;
+    }
+    if (check(ID)) {
+        if (peek(1).type == LPAREN) {
+            return parseFuncCall();
+        }
+        return parseLValue();
+    }
+
+    const Token& bad = peek();
+    throw runtime_error(
+        "Syntax Error at line " + to_string(bad.line) +
+        ", col " + to_string(bad.column) +
+        ": Expected expression (found '" + bad.lexeme + "')"
+    );
+}
+
+// FuncCall -> ID ( ( Expr ( , Expr )* )? )
+ASTNode* Parser::parseFuncCall() {
+    Token fn = expect(ID, "Expected function name");
+    ASTNode* callNode = new ASTNode(NODE_FUNC_CALL, fn.lexeme, "", fn.line);
+
+    expect(LPAREN, "Expected '(' in function call");
+    if (!check(RPAREN)) {
+        callNode->addChild(parseExpr());
+        while (match({COMMA})) {
+            callNode->addChild(parseExpr());
+        }
+    }
+    expect(RPAREN, "Expected ')' after function arguments");
+    return callNode;
+}
+
+void Parser::printASTNode(const ASTNode* node, ofstream& out, const string& prefix, bool isLast) {
+    if (node == nullptr) return;
+
+    out << prefix;
+    if (!prefix.empty() || node->kind != NODE_PROGRAM) {
+        out << (isLast ? "`-- " : "|-- ");
+    }
+
+    out << nodeKindToString(node->kind);
+    if (!node->value.empty()) {
+        out << " [val=\"" << node->value << "\"]";
+    }
+    if (!node->dataType.empty()) {
+        out << " [type=\"" << node->dataType << "\"]";
+    }
+    if (node->line > 0) {
+        out << " (line " << node->line << ")";
+    }
+    out << "\n";
+
+    string childPrefix = prefix;
+    if (node->kind != NODE_PROGRAM) {
+        childPrefix += (isLast ? "    " : "|   ");
+    }
+
+    for (size_t i = 0; i < node->children.size(); i++) {
+        bool lastChild = (i + 1 == node->children.size());
+        printASTNode(node->children[i], out, childPrefix, lastChild);
+    }
+}
+
+bool Parser::writeASTToFile(const ASTNode* root, const string& outputPath) {
+    ofstream out(outputPath);
+    if (!out.is_open() || root == nullptr) {
+        return false;
+    }
+
+    out << root->value << "\n";
+    for (size_t i = 0; i < root->children.size(); i++) {
+        bool lastChild = (i + 1 == root->children.size());
+        printASTNode(root->children[i], out, "", lastChild);
+    }
+
+    return true;
+}
