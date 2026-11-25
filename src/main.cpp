@@ -1,5 +1,6 @@
 #include "../include/lexer.h"
 #include "../include/parser.h"
+#include "../include/semantic.h"
 #include <fstream>
 #include <iostream>
 #include <sstream>
@@ -50,6 +51,7 @@ int main(int argc, char* argv[]) {
     string baseName = extractBaseName(inputPath);
     string tokOutputPath = "build/" + baseName + ".tok";
     string astOutputPath = "build/" + baseName + ".ast";
+    string symOutputPath = "build/" + baseName + ".sym";
 
     ASTNode* astRoot = nullptr;
 
@@ -62,7 +64,7 @@ int main(int argc, char* argv[]) {
             cerr << "Error: Failed to write token file '" << tokOutputPath << "'\n";
             return 1;
         }
-        cout << "[Lexer]  Tokenized " << tokens.size() << " tokens -> " << tokOutputPath << "\n";
+        cout << "[Lexer]    Tokenized " << tokens.size() << " tokens -> " << tokOutputPath << "\n";
 
         // Stage 2: Syntax Analysis (Parsing)
         Parser parser(tokens);
@@ -73,7 +75,18 @@ int main(int argc, char* argv[]) {
             cerr << "Error: Failed to write AST file '" << astOutputPath << "'\n";
             return 1;
         }
-        cout << "[Parser] Generated AST -> " << astOutputPath << "\n";
+        cout << "[Parser]   Generated AST -> " << astOutputPath << "\n";
+
+        // Stage 3: Semantic Analysis & Type Checking
+        SemanticAnalyzer semantic;
+        semantic.analyzeProgram(astRoot);
+
+        if (!semantic.writeSymbolTable(symOutputPath)) {
+            delete astRoot;
+            cerr << "Error: Failed to write symbol table file '" << symOutputPath << "'\n";
+            return 1;
+        }
+        cout << "[Semantic] Verified types & wrote symbol table -> " << symOutputPath << "\n";
 
         delete astRoot;
     } catch (const exception& ex) {
